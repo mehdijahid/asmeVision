@@ -1,0 +1,26 @@
+.navigation{
+    width: 100%;
+}
+.navigation_title div span:nth-child(1){
+    font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 3rem;
+    letter-spacing: 7px;
+}
+.navigation_title div span:nth-child(2){
+    font-family:'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+    font-size: 2rem;
+    font-weight: 10px;
+    letter-spacing: 5px;
+    margin-top: -0.8rem;
+    color: rgb(173, 230, 255);
+}
+.navigation_links a{
+    font-size: 1.4rem;
+    text-decoration: none;
+    color: black;
+}
+.navigation_links > a:nth-child(1) {
+    margin-left: 7rem;
+    font-weight: bold;
+}
+
