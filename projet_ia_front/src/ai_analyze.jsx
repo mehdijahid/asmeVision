@@ -9,7 +9,6 @@ export default function Upload() {
     const [uploadedImage, setUploadedImage] = useState(null);
     const [userName, setUserName] = useState('');
     const fileInputRef = useRef(null);
-
     useEffect(() => {
         // Récupérer les informations de l'utilisateur depuis localStorage
         const userString = localStorage.getItem('user');

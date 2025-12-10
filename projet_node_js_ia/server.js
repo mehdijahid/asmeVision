@@ -15,13 +15,11 @@ dotenv.config();
 const app = express();
 const port = 3000;
 
-// Middleware
 app.use(express.json());
 app.use(cors());
 app.use(express.static("public"));
-app.use('/uploads', express.static('uploads')); // Servir les images uploadées
+app.use('/uploads', express.static('uploads'));
 
-// Configuration Multer pour sauvegarder les fichiers
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const dir = 'uploads/';
@@ -106,14 +104,12 @@ app.post("/login", async (req, res) => {
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(400).json({ error: "Incorrect password" });
 
-    // Créer un JWT token
     const token = jwt.sign(
       { userId: user._id, email: user.email },
       process.env.JWT_SECRET || "your_secret_key_2024",
       { expiresIn: "24h" }
     );
-
-    // S'assurer que la réponse est bien formatée
+    
     return res.status(200).json({
       message: "Login successful",
       token: token,
@@ -130,9 +126,7 @@ app.post("/login", async (req, res) => {
   }
 });
 
-// ==================== ROUTES IMAGES ====================
-
-// Analyser et sauvegarder une image
+// Analyze Image
 app.post("/analyze", authenticateToken, upload.single("image"), async (req, res) => {
   try {
     console.log("📸 Analyze request from user:", req.user.userId);
@@ -141,45 +135,38 @@ app.post("/analyze", authenticateToken, upload.single("image"), async (req, res)
       console.log("❌ No file uploaded");
       return res.status(400).json({ error: "No image provided" });
     }
-
+    
     console.log("✅ File received:", req.file.originalname, req.file.mimetype);
-
     const buffer = fs.readFileSync(req.file.path);
     console.log("✅ File read, size:", buffer.length, "bytes");
-
-    // Vérifier la clé API
+    
     const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
     if (!apiKey) {
       console.error("❌ API_KEY or GEMINI_API_KEY not found in .env");
       fs.unlinkSync(req.file.path);
       return res.status(500).json({ error: "API configuration error" });
     }
-
-    console.log("🤖 Calling Google AI...");
     
-    // Analyser avec Google AI
+    console.log("🤖 Calling Google AI...");
     const ai = new GoogleGenAI({
       apiKey: apiKey
     });
-
+    
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [
         createUserContent([
-          "Say hello first and describe this image in 3 lines, including the background.",
+          "Say hello first and describe this image in 3 lines, including the background in french language.",
           { inlineData: { data: buffer.toString("base64"), mimeType: req.file.mimetype } }
         ])
       ]
     });
-
+    
     console.log("✅ AI response received");
-
     const description = response.candidates[0].content.parts[0].text;
     console.log("📝 Description:", description.substring(0, 100) + "...");
-
-    // Sauvegarder dans MongoDB avec l'URL du fichier
-    const imageUrl = `/uploads/${req.file.filename}`;
     
+    const imageUrl = `/uploads/${req.file.filename}`;
     const newImage = await Image.create({
       userId: req.user.userId,
       filename: req.file.originalname,
@@ -187,12 +174,9 @@ app.post("/analyze", authenticateToken, upload.single("image"), async (req, res)
       description: description,
       mimeType: req.file.mimetype
     });
-
+    
     console.log("✅ Image saved to DB with ID:", newImage._id);
-
-    // NE PAS supprimer le fichier - il reste dans uploads/
-    // fs.unlinkSync(req.file.path);
-
+    
     res.json({
       success: true,
       description: description,
@@ -205,7 +189,6 @@ app.post("/analyze", authenticateToken, upload.single("image"), async (req, res)
     console.error("Error message:", err.message);
     console.error("Full error:", err);
     
-    // Supprimer le fichier en cas d'erreur
     if (req.file && req.file.path && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
@@ -214,15 +197,59 @@ app.post("/analyze", authenticateToken, upload.single("image"), async (req, res)
   }
 });
 
-// Récupérer l'historique des images de l'utilisateur
+// Get user's images (historique)
 app.get("/my-images", authenticateToken, async (req, res) => {
   try {
+    console.log("📋 Fetching images for user:", req.user.userId);
+    
     const images = await Image.find({ userId: req.user.userId })
       .sort({ uploadedAt: -1 })
       .limit(50);
 
-    res.json({ images });
+    console.log(`✅ Found ${images.length} images`);
+    
+    res.json({ 
+      success: true,
+      images: images 
+    });
   } catch (err) {
+    console.error("❌ Error fetching images:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete an image
+app.delete("/delete-image/:id", authenticateToken, async (req, res) => {
+  try {
+    const imageId = req.params.id;
+    console.log("🗑️ Delete request for image:", imageId);
+    
+    const image = await Image.findOne({ 
+      _id: imageId, 
+      userId: req.user.userId 
+    });
+    
+    if (!image) {
+      return res.status(404).json({ error: "Image not found or unauthorized" });
+    }
+    
+    // Supprimer le fichier physique
+    const filePath = `uploads/${image.url.split('/').pop()}`;
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      console.log("✅ File deleted:", filePath);
+    }
+    
+    // Supprimer de la base de données
+    await Image.deleteOne({ _id: imageId });
+    console.log("✅ Image deleted from DB");
+    
+    res.json({ 
+      success: true,
+      message: "Image deleted successfully" 
+    });
+  } catch (err) {
+    console.error("❌ Error deleting image:", err);
     res.status(500).json({ error: err.message });
   }
 });
